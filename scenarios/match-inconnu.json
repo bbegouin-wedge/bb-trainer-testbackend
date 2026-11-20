@@ -1,0 +1,13 @@
+{
+  "name": "Match inconnu",
+  "description": "le premier accès du coach est refusé comme sur un match inconnu (404, fermeture 4404) ; le suivant passe",
+  "group": "Pannes",
+  "rule": "§7",
+  "game": {"game_id": "01JCQ4M8Z7T2V9K3X5R1N6B0WD", "home_coach": "01JCQ4K2H8P5S7D3F9A1E6C0QM", "home_team": "01JCPZ8E0000000000000Q3TN0", "visitor_coach": "01JCQ4K9R3T6W8Y2B5N1M4V7XZ", "visitor_team": "01JCPZ9K0000000000000M1VD0"},
+  "steps": [
+    {"do": "refuse_access", "to": "visitor", "status": 404},
+    {"wait": "connect", "coach": "home", "timeout": 60},
+    {"wait": "connect", "coach": "visitor", "timeout": 60},
+    {"do": "finish"}
+  ]
+}

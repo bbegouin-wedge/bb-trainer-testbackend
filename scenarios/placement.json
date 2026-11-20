@@ -1,0 +1,21 @@
+{
+  "name": "Placement d'une équipe",
+  "description": "set_up rouverte après chaque commande, avec les motifs d'un refus ; la validation clôt (à venir A3)",
+  "group": "Parcours nominaux",
+  "rule": "A3",
+  "game": {"game_id": "01JCQ4M8Z7T2V9K3X5R1N6B0WD", "home_coach": "01JCQ4K2H8P5S7D3F9A1E6C0QM", "home_team": "01JCPZ8E0000000000000Q3TN0", "visitor_coach": "01JCQ4K9R3T6W8Y2B5N1M4V7XZ", "visitor_team": "01JCPZ9K0000000000000M1VD0"},
+  "settings": {"relay_facts": true},
+  "steps": [
+    {"wait": "connect", "coach": "home", "timeout": 60},
+    {"wait": "connect", "coach": "visitor", "timeout": 60},
+    {"do": "phase", "label": "Coup d'envoi · placement du domicile"},
+    {"do": "request", "to": "home", "key": "set_up", "options": {"accepts": ["place_player", "reserve_player", "end_set_up"], "rejected": []}},
+    {"wait": "command", "coach": "home", "timeout": 120, "note": "un placement accepté : fait, puis demande rouverte",
+     "judge": {"kind": "accept_reopen", "then": [{"do": "fact", "fact": {"type": "player_placed", "side": "home", "player_id": "01JCQ5000000000000000000P1", "square": {"x": 12, "y": 7}}}]}},
+    {"wait": "command", "coach": "home", "timeout": 120, "note": "un refus motivé : la demande revient avec rejected",
+     "judge": {"kind": "accept", "then": [{"do": "request", "to": "home", "key": "set_up", "options": {"accepts": ["place_player", "reserve_player", "end_set_up"], "rejected": ["hors de sa moitié"]}}]}},
+    {"wait": "command", "coach": "home", "timeout": 120, "note": "la validation",
+     "judge": {"kind": "accept", "then": [{"do": "fact", "fact": {"type": "team_set_up", "side": "home"}}]}},
+    {"do": "finish"}
+  ]
+}

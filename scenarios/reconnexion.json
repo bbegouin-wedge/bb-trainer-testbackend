@@ -1,0 +1,17 @@
+{
+  "name": "Reconnexion en pleine demande",
+  "description": "coupure brutale (1006) pendant une demande ouverte : le client rouvre son canal et la retrouve en rattrapage",
+  "group": "Cas limites du protocole",
+  "rule": "R7",
+  "game": {"game_id": "01JCQ4M8Z7T2V9K3X5R1N6B0WD", "home_coach": "01JCQ4K2H8P5S7D3F9A1E6C0QM", "home_team": "01JCPZ8E0000000000000Q3TN0", "visitor_coach": "01JCQ4K9R3T6W8Y2B5N1M4V7XZ", "visitor_team": "01JCPZ9K0000000000000M1VD0"},
+  "steps": [
+    {"wait": "connect", "coach": "home", "timeout": 60},
+    {"wait": "connect", "coach": "visitor", "timeout": 60},
+    {"do": "request", "to": "home", "key": "kick_off_choice", "options": {"accepts": ["choose_kick_off"], "choices": ["kick", "receive"]}},
+    {"do": "cut", "to": "home", "mode": "abrupt"},
+    {"wait": "delay", "seconds": 0.2},
+    {"wait": "connect", "coach": "home", "timeout": 10, "note": "le client doit revenir seul"},
+    {"wait": "command", "coach": "home", "timeout": 60},
+    {"do": "finish"}
+  ]
+}

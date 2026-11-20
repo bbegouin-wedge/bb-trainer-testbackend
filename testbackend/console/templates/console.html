@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+{% set page = "console" %}
+{% block title %}Doublure automaton — console{% endblock %}
+{% block body_attrs %}{% if game %}ws-connect="/ui/games/{{ game.game_id }}/ws"{% endif %}{% endblock %}
+{% block main %}
+{% import "_regions.html" as r with context %}
+<script type="application/json" id="catalog">{{ catalog_json | tojson }}</script>
+<main class="console">
+
+  <aside class="stack">
+    <section class="panel">
+      <header><h2>Matchs</h2><div class="spacer"></div>
+        <button class="btn sm primary" hx-post="/pilot/games" data-body="{}" data-then="open-game">+ Nouveau</button></header>
+      {{ r.games(backend, game) }}
+      <div class="body" style="border-top:1px solid var(--line)">
+        <p class="hint" style="margin:0">Un match se crée ici, par <code>POST /games</code> sur le port des canaux (comme bloodbowlclub.com), ou par un scénario. Les <code>game_id</code> et <code>coach_id</code> sont à recopier dans les <code>@export</code> de bbTrainer.</p>
+      </div>
+    </section>
+    <section class="panel">
+      <header><h2>Réglages</h2></header>
+      {{ r.settings_panel(settings) }}
+    </section>
+    <section class="panel">
+      <header><h2>Routes</h2></header>
+      <div class="body">
+        <dl class="kv">
+          <dt>WS</dt><dd>/games/{id}/coaches/{coach}/ws</dd>
+          <dt>POST</dt><dd>/games</dd>
+          <dt>GET</dt><dd>/games/{id}/journal</dd>
+          <dt>API</dt><dd>/pilot/… (console)</dd>
+        </dl>
+      </div>
+    </section>
+  </aside>
+
+  {% if game %}
+  {% set gid = game.game_id %}
+  {% set actions = "/pilot/games/" ~ gid ~ "/actions" %}
+  <section class="stack">
+    {{ r.head(game) }}
+    <div class="coaches">
+      {{ r.coach_panel(game, "home") }}
+      {{ r.coach_panel(game, "visitor") }}
+    </div>
+
+    <section class="panel composer">
+      <div class="tabs" role="tablist">
+        <button class="on" data-tab="t-req" type="button">Demande</button>
+        <button data-tab="t-fact" type="button">Fait</button>
+        <button data-tab="t-end" type="button">Fin du match</button>
+        <button data-tab="t-chaos" type="button">Pannes</button>
+        <button data-tab="t-raw" type="button">Trame brute</button>
+        <button data-tab="t-phase" type="button">Étape</button>
+        <span class="spacer"></span>
+        <label class="stage">Envoyer {{ r.stage_select(game) }}</label>
+      </div>
+      <div class="body">
+        <form class="tab-pane on" id="t-req" hx-post="{{ actions }}" data-stageable>
+          <input type="hidden" name="do" value="request">
+          <div class="form-grid">
+            <label>Destinataire</label>
+            <div class="radio-row">
+              <label><input type="radio" name="to" value="home" checked> <span style="color:var(--home)">domicile</span></label>
+              <label><input type="radio" name="to" value="visitor"> <span style="color:var(--visitor)">visiteur</span></label>
+              <label><input type="radio" name="to" value="any"> n'importe quel coach <span class="hint">(sans <code>to</code>)</span></label>
+            </div>
+            <label>Modèle</label>
+            <select data-fill="request">
+              {% for key, template in catalog.requests.items() %}
+              <option value="{{ key }}">{{ key }} — {{ template.description }}{{ " (" ~ template.status ~ ")" if template.status }}</option>
+              {% endfor %}
+              <option value="">libre</option>
+            </select>
+            <label>key</label>
+            <input type="text" class="mono" name="key" required>
+            <label>request_id</label>
+            <input type="text" class="mono" name="request_id" data-type="int" placeholder="vide : le suivant ({{ game.next_request_id }} à l'ouverture de la page)">
+            <label>options</label>
+            <textarea class="mono" name="options" data-type="json"></textarea>
+            <label></label>
+            <div class="hint"><code>to</code> et <code>coach_id</code> sont posés d'après le destinataire.</div>
+            <label></label>
+            <div class="flags" style="gap:4px">
+              <label class="flag"><input type="checkbox" name="replace" checked> <span>Remplacer la demande ouverte de même <code>key</code></span></label>
+              <label class="flag"><input type="checkbox" name="twice"> <span>Envoyer la trame deux fois</span></label>
+            </div>
+          </div>
+          <div class="btn-row" style="margin-top:10px"><button class="btn primary">Ouvrir la demande</button></div>
+        </form>
+
+        <form class="tab-pane" id="t-fact" hx-post="{{ actions }}" data-stageable>
+          <input type="hidden" name="do" value="fact">
+          <div class="form-grid">
+            <label>Type</label>
+            <select data-fill="fact">
+              {% for type in catalog.facts %}<option value="{{ type }}">{{ type }}{{ " (" ~ catalog.facts[type].status ~ ")" if catalog.facts[type].status }}</option>{% endfor %}
+            </select>
+            <label>fact</label>
+            <textarea class="mono" name="fact" data-type="json"></textarea>
+            <label>seq</label>
+            <input type="text" class="mono" name="seq" data-type="int" placeholder="vide : le suivant ; imposé : trou ou doublon">
+            <label>Envoyer à</label>
+            <div class="radio-row">
+              <label><input type="radio" name="to" value="both" checked> deux coachs</label>
+              <label><input type="radio" name="to" value="home"> domicile</label>
+              <label><input type="radio" name="to" value="visitor"> visiteur</label>
+            </div>
+            <label></label>
+            <label class="flag"><input type="checkbox" name="queued"> <span>Mettre en file : part avant la prochaine demande</span></label>
+          </div>
+          <p class="hint">Relais coupé (réglages) : le fait est tenu au journal, sans partir, comme aujourd'hui dans automaton.</p>
+          <button class="btn primary">Émettre le fait</button>
+        </form>
+
+        <form class="tab-pane" id="t-end" hx-post="{{ actions }}" data-stageable>
+          <input type="hidden" name="do" value="finish">
+          <div class="form-grid"><label>output</label><textarea class="mono" name="output" data-type="json" style="min-height:60px">null</textarea></div>
+          <p class="hint">Envoie <code>finished</code> aux coachs connectés et ferme les demandes.</p>
+          <button class="btn primary">Terminer le match</button>
+        </form>
+
+        <div class="tab-pane" id="t-chaos">
+          <div class="form-grid">
+            <label>Sockets</label>
+            <div class="btn-row">
+              <button class="btn sm danger" hx-post="{{ actions }}" data-body='{"do": "cut", "to": "both", "mode": "abrupt"}'>Couper les deux (1006)</button>
+              <button class="btn sm" hx-post="{{ actions }}" data-body='{"do": "cut", "to": "both", "mode": "clean"}'>Fermer les deux (1000)</button>
+            </div>
+            <label>Écoute</label>
+            <div class="btn-row">
+              <button class="btn sm danger" hx-post="{{ actions }}" data-body='{"do": "listening", "on": false}'>Arrêter l'écoute des canaux</button>
+              <button class="btn sm" hx-post="{{ actions }}" data-body='{"do": "listening", "on": true}'>Relancer</button>
+            </div>
+            {% for side in ["home", "visitor"] %}
+            <label>Trame {{ SIDE_LABEL[side] }}</label>
+            <form class="btn-row" hx-post="{{ actions }}">
+              <input type="hidden" name="do" value="frame_fault"><input type="hidden" name="to" value="{{ side }}">
+              <select name="fault" style="width:auto"><option value="drop">perdre</option><option value="duplicate">doubler</option><option value="delay">retarder</option></select>
+              <input type="text" class="mono" name="delay_ms" data-type="int" value="2000" style="width:70px"> <span class="hint">ms</span>
+              <button class="btn sm warn">Armer sur la prochaine trame</button>
+            </form>
+            {% endfor %}
+          </div>
+          <p class="hint">Les pannes par coach (coupure, prochain accès) sont dans son panneau.</p>
+        </div>
+
+        <form class="tab-pane" id="t-raw" hx-post="{{ actions }}" data-stageable>
+          <input type="hidden" name="do" value="raw">
+          <div class="form-grid">
+            <label>Canal</label>
+            <div class="radio-row"><label><input type="radio" name="to" value="home" checked> domicile</label><label><input type="radio" name="to" value="visitor"> visiteur</label></div>
+            <label>Texte</label>
+            <textarea class="mono" name="text" style="min-height:70px">{"type": "accepted", "command": {"type": "choose_kick_off", "choice": "kick"}}</textarea>
+          </div>
+          <p class="hint">Envoyé tel quel, sans contrôle : une Response sans commande, du texte non JSON…</p>
+          <button class="btn warn">Envoyer la trame</button>
+        </form>
+
+        <form class="tab-pane" id="t-phase" hx-post="{{ actions }}">
+          <input type="hidden" name="do" value="phase">
+          <div class="form-grid"><label>Libellé</label><input type="text" name="label" value="{{ game.phase }}" placeholder="ex. Avant-match · choix du coup d'envoi"></div>
+          <p class="hint">Pour mémoire, dans l'en-tête : le client n'en sait rien.</p>
+          <button class="btn primary">Nommer l'étape</button>
+        </form>
+      </div>
+    </section>
+
+    <div class="coaches">
+      {{ r.facts(game, settings) }}
+      {{ r.conformity_panel(conformity) }}
+    </div>
+  </section>
+
+  <section class="panel wire">
+    <header><h2>Le fil</h2><div class="spacer"></div>
+      <a class="btn sm ghost" href="/games/{{ gid }}/journal" target="_blank">Journal JSON</a>
+      <a class="btn sm ghost" href="/ui/games/{{ gid }}/scenario.json" download="fil-{{ gid }}.json">En scénario</a></header>
+    <div class="filters" id="wire-filters">
+      <label class="pill home"><input type="checkbox" checked data-hide="home"> domicile</label>
+      <label class="pill visitor"><input type="checkbox" checked data-hide="visitor"> visiteur</label>
+      <label class="pill"><input type="checkbox" checked data-hide="sys"> système</label>
+    </div>
+    {{ r.wire(game) }}
+  </section>
+  {% else %}
+  <section class="panel" style="grid-column: span 2">
+    <div class="body"><p>Aucun match. Créez-en un (« + Nouveau »), ou lancez un scénario.</p></div>
+  </section>
+  {% endif %}
+</main>
+{% endblock %}

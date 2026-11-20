@@ -1,0 +1,65 @@
+[project]
+name = "bb-testbackend"
+version = "0.1.0"
+description = "Doublure d'automaton : le canal du coach, piloté à la main ou par scénario, pour tester bbTrainer"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.162.0",
+    "jinja2>=3.1.6",
+    "pydantic>=2.14.2",
+    "python-multipart>=0.0.33",
+    "python-ulid>=4.1.0",
+    "uvicorn>=0.54.0",
+    "websockets>=17.4",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "mypy>=2.4.1",
+    "pytest>=9.2.0",
+    "pytest-cov>=7.1.0",
+    "pytest-timeout>=2.4.0",
+    "ruff>=0.17.3",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra --strict-markers --import-mode=importlib -m 'not contract'"
+timeout = 20
+markers = [
+    "contract: comparaison avec un vrai serveur automaton (make check-automaton)",
+]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+plugins = ["pydantic.mypy"]
+explicit_package_bases = true
+exclude = ["^rawpages/", "^kanban/"]
+
+[tool.ruff]
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+# Les tests citent des messages et des trames entiers : on ne les coupe pas.
+"tests/*" = ["E501"]
+
+[tool.coverage.run]
+source = ["testbackend"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
+skip_covered = true
+exclude_also = [
+    "case _:\\s*\\n\\s*assert_never\\(",
+    "assert_never\\(",
+    "if __name__ == .__main__.:",
+]

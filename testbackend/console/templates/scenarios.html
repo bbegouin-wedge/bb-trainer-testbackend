@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Doublure automaton — scénarios{% endblock %}
+{% block body_attrs %}ws-connect="/ui/scenarios/ws{{ '?file=' ~ file if file }}"{% endblock %}
+{% block main %}
+{% import "_scenario_regions.html" as s with context %}
+<main class="scen-layout">
+  <aside class="panel">
+    <header><h2>Bibliothèque</h2></header>
+    <ul class="lib">
+      {% for group, entries in library | groupby("group") %}
+      <li class="grp">{{ group }}</li>
+      {% for entry in entries %}
+      <li class="{{ 'on' if entry.file == file }}" onclick="location.href='/ui/scenarios?file={{ entry.file }}'">
+        <div class="n">{{ entry.name }}</div>
+        <div class="d">{{ entry.description }}{% if entry.rule %} <span class="pill">{{ entry.rule }}</span>{% endif %}</div>
+      </li>
+      {% endfor %}
+      {% else %}
+      <li class="hint">Aucun scénario dans scenarios/.</li>
+      {% endfor %}
+    </ul>
+  </aside>
+
+  {{ s.run_panel(scenario, file, steps, run, games) }}
+
+  <aside class="panel">
+    <header><h2>Le format</h2></header>
+    <div class="body">
+      <p class="hint" style="margin-top:0">Les fichiers de <code>scenarios/</code> sont la seule source : la page les joue, sans les modifier. Pour en écrire un, jouez le match à la main, puis « En scénario » dans le fil de la console, et retouchez le fichier.</p>
+<pre class="mono" style="font-size:11px; color:var(--muted)">{"wait": "connect", "coach": "home"}
+{"do": "request", "to": "home",
+ "key": "kick_off_choice",
+ "options": {"accepts": [...]}}
+{"wait": "command", "coach": "home",
+ "type": "choose_kick_off",
+ "bind": {"choice": "kick_choice"},
+ "set": {"side": {"from": "$kick_choice",
+   "map": {"kick": "home",
+           "receive": "visitor"}}},
+ "judge": {"then": [{"do": "fact",
+   "fact": {"type": "kicking_team_chosen",
+            "side": "$side"}}]},
+ "timeout": 30}
+{"do": "finish"}</pre>
+      <p class="hint">En ligne de commande : <code>make play SCENARIO=scenarios/x.json</code> joue le scénario et sort en 0 s'il va au bout.</p>
+    </div>
+  </aside>
+</main>
+{% endblock %}

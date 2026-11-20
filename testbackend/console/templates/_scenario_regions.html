@@ -1,0 +1,57 @@
+{% macro run_panel(scenario, file, steps, run, games, oob=False) %}
+{% set mine = run.file == file and run.status != "idle" %}
+<section class="panel" id="scenario-run"{% if oob %} hx-swap-oob="true"{% endif %}>
+  <header>
+    <h2>{{ scenario.name if scenario else "Aucun scénario" }}</h2>
+    <div class="spacer"></div>
+    {% if file %}<span class="pill">scenarios/{{ file }}</span>{% endif %}
+  </header>
+  {% if scenario %}
+  <div class="body run-bar">
+    {% if run.active %}
+      <span class="pill {{ 'warn' if run.status == 'paused' else 'ok' }}">{{ {"running": "en cours", "paused": "en pause"}[run.status] }} · étape {{ run.index + 1 }}</span>
+      {% if run.game_id %}<a class="pill" href="/ui/games/{{ run.game_id }}">match {{ run.game_id | short }}</a>{% endif %}
+      <span class="spacer"></span>
+      <button class="btn" hx-post="/pilot/scenarios/step" data-body="{}">Pas ▸</button>
+      {% if run.status == "paused" %}<button class="btn primary" hx-post="/pilot/scenarios/resume" data-body="{}">Reprendre ▶</button>
+      {% else %}<button class="btn" hx-post="/pilot/scenarios/pause" data-body="{}">Pause ❚❚</button>{% endif %}
+      <button class="btn danger" hx-post="/pilot/scenarios/stop" data-body="{}">Arrêter</button>
+    {% else %}
+      <form class="run-form" hx-post="/pilot/scenarios/run">
+        <input type="hidden" name="file" value="{{ file }}">
+        <span class="label">Match</span>
+        <select name="game_id" style="width:auto">
+          <option value="">nouveau{{ " (ids du scénario)" if scenario.game.game_id }}</option>
+          {% for g in games | reverse %}<option value="{{ g.game_id }}">{{ g.game_id | short }}{{ " · " ~ g.phase if g.phase }}</option>{% endfor %}
+        </select>
+        <label class="flag"><input type="checkbox" name="step_mode"> pas à pas</label>
+        <span class="spacer"></span>
+        <button class="btn primary">Lancer ▶</button>
+      </form>
+      {% if mine %}
+        <span class="pill {{ 'ok' if run.status == 'done' else 'err' }}">{{ {"done": "réussi", "failed": "échoué", "stopped": "arrêté"}[run.status] }}</span>
+        {% if run.game_id %}<a class="pill" href="/ui/games/{{ run.game_id }}">match {{ run.game_id | short }}</a>{% endif %}
+      {% endif %}
+    {% endif %}
+  </div>
+  {% if mine and run.error %}<div class="body"><div class="flash" style="margin:0; position:static">{{ run.error }}</div></div>{% endif %}
+  <ol class="steps">
+    {% for step in steps %}
+    {% set i = loop.index0 %}
+    <li class="{% if mine and (i < run.index or run.status == 'done') %}done{% elif mine and i == run.index %}current{% endif %}">
+      <div>
+        <div class="what"><span class="kind {{ step.kind }}">{{ step.tag }}</span><span class="verb">{{ step.label }}</span></div>
+        <div class="detail">{{ step.detail }}</div>
+        {% if step.note %}<div class="when">{{ step.note }}</div>{% endif %}
+      </div>
+      <span></span>
+    </li>
+    {% endfor %}
+  </ol>
+  {% if mine and run.variables %}
+  <div class="body" style="border-top:1px solid var(--line)"><span class="label">Variables</span>
+    <dl class="kv" style="margin-top:6px">{% for k, v in run.variables.items() %}<dt>${{ k }}</dt><dd>{{ v | pretty }}</dd>{% endfor %}</dl></div>
+  {% endif %}
+  {% endif %}
+</section>
+{% endmacro %}

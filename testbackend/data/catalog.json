@@ -1,0 +1,35 @@
+{
+  "source": "bloodbowltrainer/docs/protocole-client-serveur.md, v0, automaton 7f5cbae ; A3 d'après set_up_team.md",
+  "types": "ulid · int · str · bool · any · side · square · a|b|c (une valeur parmi) ; suffixe [] : liste ; suffixe ? : facultatif",
+  "commands": {
+    "join_game": {"fields": {"coach_id": "ulid"}},
+    "choose_kick_off": {"fields": {"choice": "kick|receive"}},
+    "place_player": {"status": "à venir A3", "fields": {"player_id": "ulid", "square": "square"}},
+    "reserve_player": {"status": "à venir A3", "fields": {"player_id": "ulid"}},
+    "end_set_up": {"status": "à venir A3", "fields": {}}
+  },
+  "requests": {
+    "kick_off_choice": {
+      "description": "le gagnant du tir au dé choisit d'engager ou de réceptionner",
+      "options": {"accepts": ["choose_kick_off"], "choices": ["kick", "receive"]}
+    },
+    "set_up": {
+      "status": "à venir A3",
+      "description": "placer son équipe ; rouverte après chaque commande, avec les motifs du refus",
+      "options": {"accepts": ["place_player", "reserve_player", "end_set_up"], "rejected": []}
+    }
+  },
+  "facts": {
+    "game_started": {"fields": {"game_id": "ulid", "expected_home_coach": "ulid", "expected_visitor_coach": "ulid", "home_team": "ulid?", "visitor_team": "ulid?", "dice_seed": "ulid"}},
+    "team_fetched": {"fields": {"side": "side", "team_id": "ulid", "roster_id": "ulid", "dedicated_fans": "int", "players": "ulid[]"}},
+    "coach_joined": {"fields": {"side": "side", "coach_id": "ulid"}},
+    "dice_rolled": {"fields": {"rolls": "any"}},
+    "fan_factor_determined": {"fields": {"side": "side", "dedicated_fans": "int", "casual_fans": "int", "fan_factor": "int"}},
+    "weather_determined": {"fields": {"roll": "int", "weather": "sweltering_heat|very_sunny|perfect_conditions|pouring_rain|blizzard"}},
+    "roll_off_won": {"fields": {"side": "side"}},
+    "kicking_team_chosen": {"fields": {"side": "side"}},
+    "player_placed": {"status": "à venir A3", "fields": {"side": "side", "player_id": "ulid", "square": "square"}},
+    "player_reserved": {"status": "à venir A3", "fields": {"side": "side", "player_id": "ulid"}},
+    "team_set_up": {"status": "à venir A3", "fields": {"side": "side"}}
+  }
+}

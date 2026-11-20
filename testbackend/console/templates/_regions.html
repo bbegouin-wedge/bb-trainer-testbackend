@@ -1,0 +1,232 @@
+{#
+  Les régions vivantes de la console. Chaque macro rend un élément qui porte
+  son id : la page les dessine, le websocket d'observateur les redessine
+  (oob=True ajoute hx-swap-oob, et l'élément remplace celui de même id).
+  Les boutons appellent l'API de pilotage : data-body est le corps JSON.
+#}
+
+{% macro oob_attr(oob) %}{% if oob %} hx-swap-oob="true"{% endif %}{% endmacro %}
+
+{% macro server(backend, game, oob=False) %}
+<div class="server" id="server"{{ oob_attr(oob) }}>
+  {% set listener = backend.listener %}
+  {% if listener is none %}
+    <span class="pill">écoute non pilotée</span>
+  {% elif listener.listening %}
+    <span class="pill ok"><span class="led"></span>canaux à l'écoute</span>
+  {% else %}
+    <span class="pill err"><span class="led"></span>canaux arrêtés</span>
+  {% endif %}
+  <span class="pill">protocole v0{% if backend.settings.variants.model_dump().values() | select | list %} + variantes{% endif %}</span>
+  <span>jugement {{ {"auto": "automatique", "manual": "manuel", "scenario": "par scénario"}[backend.settings.judge] }}</span>
+</div>
+{% endmacro %}
+
+{% macro games(backend, game, oob=False) %}
+<ul class="games" id="games"{{ oob_attr(oob) }}>
+  {% for g in backend.games.values() | reverse %}
+  <li class="{{ 'on' if game and g.game_id == game.game_id }}" onclick="location.href='/ui/games/{{ g.game_id }}'">
+    <div class="gid">{{ g.game_id | short }}</div>
+    <div class="meta">
+      {% for side, coach in g.coaches.items() %}
+        <span class="pill {{ side }}"{% if not coach.connected %} style="opacity:.5"{% endif %}>{% if coach.connected %}<span class="led"></span>{% endif %}{{ SIDE_LABEL[side][:3] }}.</span>
+      {% endfor %}
+      {% if g.pending %}<span class="pill warn">{{ g.pending | length }} à juger</span>{% endif %}
+      {% if g.finished %}<span class="pill">terminé</span>{% elif g.phase %}<span class="pill">{{ g.phase }}</span>{% endif %}
+    </div>
+  </li>
+  {% else %}
+  <li class="hint">Aucun match.</li>
+  {% endfor %}
+</ul>
+{% endmacro %}
+
+{% macro settings_panel(settings, oob=False) %}
+<div class="body flags" id="settings"{{ oob_attr(oob) }}>
+  <div class="label">Jugement des commandes</div>
+  {% for mode, title, hint in [
+      ("auto", "Automatique", "Comme automaton : l'unique demande ouverte est servie ; rouverte si le type n'est pas dans accepts ; 409 sinon."),
+      ("manual", "Manuel", "Chaque commande attend un verdict de l'opérateur."),
+      ("scenario", "Scénario", "Le scénario en cours juge. Posé par le lecteur.")] %}
+  <label class="flag"><input type="radio" name="judge" {{ 'checked' if settings.judge == mode }}
+      hx-patch="/pilot/settings" hx-trigger="change" data-body='{"judge": "{{ mode }}"}'>
+    <span>{{ title }}<small>{{ hint }}</small></span></label>
+  {% endfor %}
+
+  <div class="label" style="margin-top:8px">Variante du protocole</div>
+  {% for name, title, tag in [
+      ("catch_up_requests", "Rattrapage des demandes à la reconnexion", "§2"),
+      ("relay_facts", "Relais des faits", "à venir A3")] %}
+  <form hx-patch="/pilot/settings" hx-trigger="change">
+    <label class="flag"><input type="checkbox" name="{{ name }}" {{ 'checked' if settings[name] }}>
+      <span>{{ title }} <span class="pill {{ 'soon' if tag != '§2' }}">{{ tag }}</span></span></label>
+  </form>
+  {% endfor %}
+  {% for name, title in [
+      ("reply_to", "Évol. 1 — reply_to + request_id"),
+      ("command_id", "Évol. 2 — id de commande repris"),
+      ("hello", "Évol. 3 — message hello"),
+      ("business_code", "Évol. 4 — code métier dans refused")] %}
+  <form hx-patch="/pilot/settings" hx-trigger="change">
+    <label class="flag"><input type="checkbox" name="variants.{{ name }}" {{ 'checked' if settings.variants[name] }}>
+      <span>{{ title }} <span class="pill prop">proposé</span></span></label>
+  </form>
+  {% endfor %}
+  <form hx-patch="/pilot/settings" hx-trigger="change" class="flag">
+    <span>Délai de reconnexion (R7)</span>
+    <input type="text" class="mono" name="reconnect_timeout_s" data-type="float" value="{{ settings.reconnect_timeout_s }}" style="width:60px">
+    <span class="hint">s</span>
+  </form>
+</div>
+{% endmacro %}
+
+{% macro head(game, oob=False) %}
+<div class="panel" id="match-head"{{ oob_attr(oob) }}>
+  <div class="match-head">
+    {% for side in ["home", "visitor"] %}
+    {% set coach = game.coaches[side] %}
+    <div{% if side == "visitor" %} style="text-align:right; order:3"{% endif %}>
+      <div class="side-name {{ side }}">{{ SIDE_LABEL[side] | capitalize }}</div>
+      <div class="hint mono">équipe {{ coach.team_id | short }}</div>
+    </div>
+    {% endfor %}
+    <div class="vs" style="order:2">
+      <div class="phase">{{ game.phase or "étape non nommée" }}</div>
+      <div class="step">match {{ game.game_id }}</div>
+      {% if game.finished %}<span class="pill">terminé</span>{% endif %}
+    </div>
+  </div>
+</div>
+{% endmacro %}
+
+{% macro coach_panel(game, side, oob=False) %}
+{% set coach = game.coaches[side] %}
+{% set gid = game.game_id %}
+{% set actions = "/pilot/games/" ~ gid ~ "/actions" %}
+<article class="panel coach {{ side }}" id="coach-{{ side }}"{{ oob_attr(oob) }}>
+  <header>
+    <h3>Coach {{ SIDE_LABEL[side] }}</h3>
+    <div class="spacer"></div>
+    {% if coach.connected %}<span class="pill ok"><span class="led"></span>connecté{% if coach.sockets > 1 %} ×{{ coach.sockets }}{% endif %}</span>
+    {% else %}<span class="pill">déconnecté</span>{% endif %}
+    {% if coach.joined %}<span class="pill">rejoint</span>{% endif %}
+  </header>
+  <div class="body">
+    <div class="ws-url"><span>{{ channels_url }}/games/{{ gid }}/coaches/{{ coach.coach_id }}/ws</span>
+      <button class="btn sm ghost" type="button" onclick="copyText(this.previousElementSibling.textContent)">Copier</button></div>
+    <dl class="kv" style="margin-top:6px"><dt>coach_id</dt><dd>{{ coach.coach_id }}</dd></dl>
+
+    {% set requests = game.requests_for(side) %}
+    <div class="section-t"><span class="label">Demandes ouvertes</span><span class="pill">{{ requests | length }}</span></div>
+    {% for req in requests %}
+    <div class="request">
+      <div class="ref"><b>{{ req.key }}</b><span class="rid">request_id {{ req.request_id }}</span><span class="spacer"></span>
+        <button class="btn sm ghost" hx-post="{{ actions }}" data-body='{"do": "reopen", "key": "{{ req.key }}"}'>Rouvrir</button>
+        <button class="btn sm ghost" hx-post="{{ actions }}" data-body='{"do": "close", "key": "{{ req.key }}"}'>Fermer</button></div>
+      <div class="opts">
+        {% for k, v in req.options.items() if k not in ("coach_id",) %}
+          <span class="chip k">{{ k }}</span>
+          {% if v is iterable and v is not string %}{% for item in v %}<span class="chip">{{ item }}</span>{% else %}<span class="chip">[]</span>{% endfor %}
+          {% else %}<span class="chip">{{ v }}</span>{% endif %}
+        {% endfor %}
+      </div>
+    </div>
+    {% else %}
+    <div class="empty">Aucune demande pour ce coach. Il doit écouter quand même (règle 6).</div>
+    {% endfor %}
+
+    {% for pending in game.pending if pending.side == side %}
+    {% set verdict = "/pilot/games/" ~ gid ~ "/pending/" ~ pending.number ~ "/verdict" %}
+    <div class="section-t"><span class="label">Commande n°{{ pending.number }} à juger</span><span class="pill warn">reçue à {{ pending.received_at | clock }}</span></div>
+    <div class="inbox">
+      <div class="cmd"><span class="arrow">↑</span><b>{{ pending.uplink.type }}</b></div>
+      <pre>{{ pending.uplink.command | pretty }}</pre>
+      {% if pending.staged %}
+      <div class="hint">Partiront avant l'accepted :
+        {% for action in pending.staged %}<code>{{ action.do }}</code>{{ ", " if not loop.last }}{% endfor %}</div>
+      {% endif %}
+      <div class="verdicts">
+        <button class="btn primary wide" hx-post="{{ verdict }}" data-body='{"kind": "like_automaton"}'>Comme automaton</button>
+        <button class="btn" hx-post="{{ verdict }}" data-body='{"kind": "accept"}'>Accepter et clore</button>
+        <button class="btn" hx-post="{{ verdict }}" data-body='{"kind": "accept_reopen"}'>Accepter et rouvrir</button>
+        <button class="btn warn" hx-post="{{ verdict }}" data-body='{"kind": "refuse", "refusal": "not_waiting"}'>409 — n'attend rien</button>
+        <button class="btn warn" hx-post="{{ verdict }}" data-body='{"kind": "refuse", "refusal": "ambiguous"}'>409 — ambiguë</button>
+        <button class="btn danger" hx-post="{{ verdict }}" data-body='{"kind": "refuse", "refusal": "unreadable"}'>422</button>
+        <button class="btn danger" hx-post="{{ verdict }}" data-body='{"kind": "refuse", "refusal": "server_error"}'>500</button>
+      </div>
+      <p class="hint" style="margin:8px 0 0">Pour enchaîner : dans le composeur, choisissez « avant l'accepted de la n°{{ pending.number }} », puis jugez.</p>
+    </div>
+    {% endfor %}
+
+    <div class="section-t"><span class="label">Socket</span></div>
+    <div class="btn-row">
+      <button class="btn sm danger" hx-post="{{ actions }}" data-body='{"do": "cut", "to": "{{ side }}", "mode": "abrupt"}'>Couper (1006)</button>
+      <button class="btn sm" hx-post="{{ actions }}" data-body='{"do": "cut", "to": "{{ side }}", "mode": "clean"}'>Fermer (1000)</button>
+      <button class="btn sm warn" hx-post="{{ actions }}" data-body='{"do": "refuse_access", "to": "{{ side }}", "status": 403}'>Prochain accès 403</button>
+      <button class="btn sm warn" hx-post="{{ actions }}" data-body='{"do": "refuse_access", "to": "{{ side }}", "status": 404}'>404</button>
+      <button class="btn sm warn" hx-post="{{ actions }}" data-body='{"do": "refuse_access", "to": "{{ side }}", "status": 500}'>Arrivée 500</button>
+    </div>
+  </div>
+</article>
+{% endmacro %}
+
+{% macro facts(game, settings, oob=False) %}
+<section class="panel" id="facts"{{ oob_attr(oob) }}>
+  <header><h3>Faits du match</h3><div class="spacer"></div>
+    {% if settings.relay_facts %}<span class="pill ok">relayés</span>{% else %}<span class="pill soon">relais coupé</span>{% endif %}</header>
+  <table class="facts">
+    <thead><tr><th>seq</th><th>type</th><th>contenu</th></tr></thead>
+    <tbody>
+    {% for fact in game.facts %}
+      <tr><td class="seq">{{ fact.seq }}</td><td class="type">{{ fact.fact.type }}</td>
+        <td class="payload">{% for k, v in fact.fact.items() if k != "type" %}{{ k }} {{ v | pretty }}{{ " · " if not loop.last }}{% endfor %}</td></tr>
+    {% endfor %}
+    {% for queued in game.queued_facts %}
+      <tr class="queued"><td class="seq">{{ queued.seq if queued.seq is not none else "…" }}</td><td class="type">{{ queued.fact.type }}</td><td class="payload">en file · part avant la prochaine demande</td></tr>
+    {% endfor %}
+    {% if not game.facts and not game.queued_facts %}<tr><td colspan="3" class="hint">Aucun fait.</td></tr>{% endif %}
+    </tbody>
+  </table>
+</section>
+{% endmacro %}
+
+{% macro conformity_panel(reports, oob=False) %}
+{% set ko = reports | selectattr("status", "equalto", "ko") | list %}
+<section class="panel" id="conformity"{{ oob_attr(oob) }}>
+  <header><h3>Conformité du client</h3><div class="spacer"></div>
+    {% if ko %}<span class="pill err">{{ ko | length }} règle{{ "s" if ko | length > 1 }} enfreinte{{ "s" if ko | length > 1 }}</span>{% else %}<span class="pill ok">aucun écart</span>{% endif %}</header>
+  <ul class="rules">
+  {% for report in reports %}
+    <li class="{{ report.status }}"><span class="ic">{{ {"ok": "✓", "ko": "✗", "na": "–"}[report.status] }}</span>
+      <span>{{ report.rule.id }} — {{ report.rule.title }}
+        <small>{% if report.deviations %}{% for d in report.deviations %}{{ SIDE_LABEL[d.side] }}, {{ d.at | clock }} : {{ d.detail }}{% if not loop.last %}<br>{% endif %}{% endfor %}
+          {% elif report.status == "na" %}{{ "non éprouvée : " if report.rule.observable }}{{ report.rule.hint }}{% else %}{{ report.rule.hint }}{% endif %}</small></span>
+      <span>{% for side in report.deviations | map(attribute="side") | unique %}<span class="pill {{ side }}">{{ SIDE_LABEL[side][:3] }}.</span>{% endfor %}</span></li>
+  {% endfor %}
+  </ul>
+</section>
+{% endmacro %}
+
+{% macro wire(game, oob=False) %}
+<div class="frames" id="wire"{{ oob_attr(oob) }}>
+  {% for e in game.wire %}
+  <div class="frame {{ e.direction }}" data-side="{{ e.side or 'none' }}">
+    <time>{{ e.at | clock }}</time>
+    <span class="dir">{{ {"down": "↓", "up": "↑", "sys": "◆"}[e.direction] }}</span>
+    <div>
+      <div class="who">{% if e.side %}<span class="pill {{ e.side }}">{{ SIDE_LABEL[e.side][:3] }}.</span>{% endif %}
+        <span class="t {{ 'sys' if e.direction == 'sys' }} {{ 'refused' if e.kind.startswith('refused') }} {{ 'fact' if e.kind.startswith('fact') }}">{{ e.kind }}</span></div>
+      {% if e.text %}<pre>{{ e.text }}</pre>{% endif %}
+      {% if e.note %}<div class="note {{ 'ok' if e.level == 'ok' }} {{ 'info' if e.level == 'info' }}">{{ e.note }}</div>{% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endmacro %}
+
+{% macro stage_select(game, oob=False) %}
+<select name="_stage" id="stage-select"{{ oob_attr(oob) }}>
+  <option value="">maintenant</option>
+  {% for p in game.pending %}<option value="{{ p.number }}">avant l'accepted de la commande n°{{ p.number }} ({{ SIDE_LABEL[p.side] }})</option>{% endfor %}
+</select>
+{% endmacro %}

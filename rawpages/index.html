@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Doublure automaton — console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!--
+  Maquette statique. Situation figée : avant-match, le coach domicile a gagné
+  le tir au dé ; la demande kick_off_choice #7 lui est ouverte, et il vient
+  d'envoyer choose_kick_off. La doublure attend que l'opérateur juge la
+  commande (mode manuel).
+-->
+
+<header class="topbar">
+  <div class="brand">
+    <span class="dot"></span>
+    <b>bb-testbackend</b>
+    <span>doublure d'automaton pour bbTrainer</span>
+  </div>
+  <nav class="topnav">
+    <a href="index.html" class="on">Console</a>
+    <a href="scenarios.html">Scénarios</a>
+  </nav>
+  <div class="spacer"></div>
+  <div class="server">
+    <span class="pill ok"><span class="led"></span>à l'écoute</span>
+    <span class="addr">ws://localhost:8000</span>
+    <span class="pill">protocole v0</span>
+    <span>2 sockets ouvertes</span>
+  </div>
+</header>
+
+<main class="console">
+
+  <!-- ═════════════ Colonne gauche : matchs et réglages ═════════════ -->
+  <aside class="stack">
+
+    <section class="panel">
+      <header><h2>Matchs</h2><div class="spacer"></div><button class="btn sm primary">+ Nouveau</button></header>
+      <ul class="games">
+        <li class="on">
+          <div class="gid">01JCQ4M8Z7…B0WD</div>
+          <div class="meta">
+            <span class="pill home"><span class="led"></span>dom.</span>
+            <span class="pill visitor"><span class="led"></span>vis.</span>
+            <span class="pill warn">1 commande à juger</span>
+          </div>
+        </li>
+        <li>
+          <div class="gid">01JCQ3TA1P…7HKE</div>
+          <div class="meta">
+            <span class="pill home" style="opacity:.5">dom. absent</span>
+            <span class="pill visitor" style="opacity:.5">vis. absent</span>
+            <span class="pill">placement</span>
+          </div>
+        </li>
+        <li>
+          <div class="gid">01JCPZQ0RW…22MS</div>
+          <div class="meta"><span class="pill">terminé</span></div>
+        </li>
+      </ul>
+      <div class="body" style="border-top:1px solid var(--line)">
+        <p class="hint" style="margin:0">Un match se crée ici ou par <code>POST /games</code>, comme le ferait bloodbowlclub.com. Les <code>game_id</code> et <code>coach_id</code> sont à recopier dans les <code>@export</code> de bbTrainer.</p>
+      </div>
+    </section>
+
+    <section class="panel">
+      <header><h2>Jugement des commandes</h2></header>
+      <div class="body flags">
+        <label class="flag"><input type="radio" name="judge" checked> <span>Manuel<small>Chaque commande attend un verdict de l'opérateur.</small></span></label>
+        <label class="flag"><input type="radio" name="judge"> <span>Automatique<small>Accepte si le <code>type</code> est dans <code>accepts</code> de l'unique demande ouverte, sinon refuse (409/422) comme automaton.</small></span></label>
+        <label class="flag"><input type="radio" name="judge"> <span>Scénario<small>Le scénario en cours décide. Voir l'onglet Scénarios.</small></span></label>
+      </div>
+    </section>
+
+    <section class="panel">
+      <header><h2>Variante du protocole</h2></header>
+      <div class="body flags">
+        <label class="flag"><input type="checkbox" checked> <span>Rattrapage des demandes à la reconnexion<small>§2, en place</small></span></label>
+        <label class="flag"><input type="checkbox"> <span>Relais des faits <span class="pill soon">à venir A3</span><small>Messages <code>fact</code>, et tous les faits à chaque connexion.</small></span></label>
+        <label class="flag"><input type="checkbox"> <span>Évol. 1 — <code>reply_to</code> + <code>request_id</code> <span class="pill prop">proposé</span></span></label>
+        <label class="flag"><input type="checkbox"> <span>Évol. 2 — <code>id</code> de commande repris <span class="pill prop">proposé</span></span></label>
+        <label class="flag"><input type="checkbox"> <span>Évol. 3 — message <code>hello</code> <span class="pill prop">proposé</span></span></label>
+        <label class="flag"><input type="checkbox"> <span>Évol. 4 — <code>code</code> métier dans <code>refused</code> <span class="pill prop">proposé</span></span></label>
+      </div>
+    </section>
+
+    <section class="panel">
+      <header><h2>Routes servies</h2></header>
+      <div class="body">
+        <dl class="kv">
+          <dt>WS</dt><dd>/games/{id}/coaches/{coach}/ws</dd>
+          <dt>POST</dt><dd>/games</dd>
+          <dt>GET</dt><dd>/games/{id}/journal</dd>
+          <dt>GET</dt><dd>/ — cette console</dd>
+        </dl>
+      </div>
+    </section>
+  </aside>
+
+  <!-- ═════════════ Colonne centrale : le match ═════════════ -->
+  <section class="stack">
+
+    <div class="panel">
+      <div class="match-head">
+        <div>
+          <div class="side-name home">Domicile</div>
+          <div class="hint mono">équipe 01JCPZ8E…Q3TN · 12 joueurs</div>
+        </div>
+        <div class="vs">
+          <div class="phase">Avant-match · choix du coup d'envoi</div>
+          <div class="step">match 01JCQ4M8Z7T2V9K3X5R1N6B0WD</div>
+          <div class="stackline" title="Pile simulée — pour mémoire, le client ne la voit pas">
+            <span>start_game</span><span>pre_match</span><span>decide_kicking_team</span>
+          </div>
+        </div>
+        <div>
+          <div class="side-name visitor">Visiteur</div>
+          <div class="hint mono" style="text-align:right">équipe 01JCPZ9K…M1VD · 11 joueurs</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="coaches">
+
+      <!-- ── Coach domicile ── -->
+      <article class="panel coach home">
+        <header>
+          <h3>Coach domicile</h3>
+          <div class="spacer"></div>
+          <span class="pill ok"><span class="led"></span>connecté · 14:02:11</span>
+          <span class="pill">rejoint</span>
+        </header>
+        <div class="body">
+          <div class="ws-url"><span>ws://localhost:8000/games/01JCQ4M8Z7T2V9K3X5R1N6B0WD/coaches/01JCQ4K2H8P5S7D3F9A1E6C0QM/ws</span><button class="btn sm ghost">Copier</button></div>
+
+          <div class="section-t"><span class="label">Demandes ouvertes</span><span class="pill">1</span></div>
+          <div class="request">
+            <div class="ref"><b>kick_off_choice</b><span class="rid">request_id 7</span><div class="spacer" style="flex:1"></div><button class="btn sm ghost">Rouvrir (#8)</button><button class="btn sm ghost">Fermer</button></div>
+            <div class="opts">
+              <span class="chip k">to</span><span class="chip">coach</span>
+              <span class="chip k">accepts</span><span class="chip">choose_kick_off</span>
+              <span class="chip k">choices</span><span class="chip">kick</span><span class="chip">receive</span>
+            </div>
+          </div>
+
+          <div class="section-t"><span class="label">Commande à juger</span><span class="pill warn">reçue il y a 4 s</span></div>
+          <div class="inbox">
+            <div class="cmd"><span class="arrow">↑</span><b>choose_kick_off</b><span class="hint">servirait kick_off_choice #7</span></div>
+            <pre>{ "command": { "type": "choose_kick_off", "choice": "kick" } }</pre>
+            <ul class="checks">
+              <li><span class="y">✓</span> une seule demande ouverte pour ce coach</li>
+              <li><span class="y">✓</span> <code>choose_kick_off</code> figure dans <code>accepts</code></li>
+              <li><span class="y">✓</span> <code>"kick"</code> figure dans <code>choices</code></li>
+              <li><span class="y">✓</span> aucune autre commande en vol</li>
+            </ul>
+            <div class="verdicts">
+              <button class="btn primary wide">Accepter et clore la demande</button>
+              <button class="btn">Accepter et rouvrir (#8)</button>
+              <button class="btn">Accepter, puis enchaîner…</button>
+              <button class="btn warn">Refuser 409 — n'attend rien</button>
+              <button class="btn warn">Refuser 409 — ambiguë</button>
+              <button class="btn danger">Refuser 422</button>
+              <button class="btn danger">Refuser 500</button>
+            </div>
+            <p class="hint" style="margin:8px 0 0">« Enchaîner » ouvre le composeur : les demandes et faits saisis partent <em>avant</em> le <code>accepted</code>, comme dans automaton (§3).</p>
+          </div>
+        </div>
+      </article>
+
+      <!-- ── Coach visiteur ── -->
+      <article class="panel coach visitor">
+        <header>
+          <h3>Coach visiteur</h3>
+          <div class="spacer"></div>
+          <span class="pill ok"><span class="led"></span>connecté · 14:02:30</span>
+          <span class="pill">rejoint</span>
+        </header>
+        <div class="body">
+          <div class="ws-url"><span>ws://localhost:8000/games/01JCQ4M8Z7T2V9K3X5R1N6B0WD/coaches/01JCQ4K9R3T6W8Y2B5N1M4V7XZ/ws</span><button class="btn sm ghost">Copier</button></div>
+
+          <div class="section-t"><span class="label">Demandes ouvertes</span><span class="pill">0</span></div>
+          <div class="empty">Aucune demande pour ce coach.<br>Il doit écouter quand même (règle 6).</div>
+
+          <div class="section-t"><span class="label">Commande à juger</span></div>
+          <div class="empty">—</div>
+
+          <div class="section-t"><span class="label">Socket</span></div>
+          <div class="btn-row">
+            <button class="btn sm danger">Couper (1006)</button>
+            <button class="btn sm">Fermer proprement (1000)</button>
+            <button class="btn sm">Refuser le prochain accès…</button>
+          </div>
+
+          <div class="section-t"><span class="label">Dernières trames</span></div>
+          <div class="hint mono" style="font-size:11px; line-height:1.7">
+            14:03:40 ↑ choose_kick_off "receive"<br>
+            14:03:40 ↓ refused 409<br>
+            14:02:30 ↓ accepted join_game
+          </div>
+        </div>
+      </article>
+    </div>
+
+    <!-- ── Composeur : ce que le serveur pousse ── -->
+    <section class="panel">
+      <div class="tabs" role="tablist">
+        <button class="on" data-tab="t-req">Demande</button>
+        <button data-tab="t-fact">Fait</button>
+        <button data-tab="t-end">Fin du match</button>
+        <button data-tab="t-chaos">Pannes</button>
+        <button data-tab="t-raw">Trame brute</button>
+      </div>
+
+      <div class="body">
+        <!-- Demande -->
+        <div class="tab-pane on" id="t-req">
+          <div class="form-grid">
+            <label>Destinataire</label>
+            <div class="radio-row">
+              <label><input type="radio" name="to" checked> <span style="color:var(--home)">domicile</span></label>
+              <label><input type="radio" name="to"> <span style="color:var(--visitor)">visiteur</span></label>
+              <label><input type="radio" name="to"> n'importe quel coach <span class="hint">(sans <code>to</code>)</span></label>
+            </div>
+
+            <label>Modèle</label>
+            <select>
+              <option>kick_off_choice — choisir d'engager ou de réceptionner</option>
+              <option>set_up — placer son équipe (à venir A3)</option>
+              <option>home / visitor — join_game (normalement servie par la connexion)</option>
+              <option>libre</option>
+            </select>
+
+            <label>key</label>
+            <input type="text" class="mono" value="kick_off_choice">
+
+            <label>request_id</label>
+            <div class="radio-row">
+              <label><input type="radio" name="rid" checked> suivant : <code>8</code></label>
+              <label><input type="radio" name="rid"> imposé : <input type="text" class="mono" value="7" style="width:60px;padding:1px 6px"></label>
+            </div>
+
+            <label>options</label>
+            <textarea class="mono">{
+  "to": "coach",
+  "coach_id": "01JCQ4K2H8P5S7D3F9A1E6C0QM",
+  "accepts": ["choose_kick_off"],
+  "choices": ["kick", "receive"]
+}</textarea>
+
+            <label></label>
+            <div class="flags" style="gap:4px">
+              <label class="flag"><input type="checkbox" checked> <span>Remplacer la demande ouverte de même <code>key</code> <span class="hint">(l'étape la rouvre)</span></span></label>
+              <label class="flag"><input type="checkbox"> <span>Garder les deux ouvertes <span class="hint">(provoque le 409 ambigu à la commande suivante)</span></span></label>
+            </div>
+          </div>
+          <div class="preview">
+            <div class="label" style="margin-bottom:4px">Trame envoyée au coach domicile</div>
+            <pre>{"type": "request", "key": "kick_off_choice", "request_id": 8, "options": {"to": "coach", "coach_id": "01JCQ4K2…C0QM", "accepts": ["choose_kick_off"], "choices": ["kick", "receive"]}}</pre>
+          </div>
+          <div class="btn-row" style="margin-top:10px">
+            <button class="btn primary">Ouvrir la demande</button>
+            <button class="btn">L'envoyer deux fois</button>
+            <button class="btn ghost">Enregistrer comme étape de scénario</button>
+          </div>
+        </div>
+
+        <!-- Fait -->
+        <div class="tab-pane" id="t-fact">
+          <p class="hint" style="margin-top:0">Activez « Relais des faits » pour que ces trames partent vraiment. Sinon elles sont seulement tenues dans le journal du match, comme aujourd'hui dans automaton.</p>
+          <div class="form-grid">
+            <label>type</label>
+            <select>
+              <option>kicking_team_chosen</option>
+              <option>game_started</option><option>team_fetched</option><option>coach_joined</option>
+              <option>dice_rolled</option><option>fan_factor_determined</option><option>weather_determined</option>
+              <option>roll_off_won</option><option>player_placed (A3)</option><option>player_reserved (A3)</option>
+            </select>
+            <label>seq</label>
+            <div class="radio-row"><label><input type="radio" name="seq" checked> suivant : <code>9</code></label><label><input type="radio" name="seq"> imposé (trou, doublon…)</label></div>
+            <label>fact</label>
+            <textarea class="mono" style="min-height:70px">{ "type": "kicking_team_chosen", "side": "home" }</textarea>
+            <label>Envoyer à</label>
+            <div class="radio-row"><label><input type="radio" name="fto" checked> deux coachs</label><label><input type="radio" name="fto"> domicile</label><label><input type="radio" name="fto"> visiteur</label></div>
+          </div>
+          <div class="btn-row" style="margin-top:10px"><button class="btn primary">Émettre le fait</button><button class="btn">Mettre en file (part avant la prochaine demande)</button></div>
+        </div>
+
+        <!-- Fin -->
+        <div class="tab-pane" id="t-end">
+          <div class="form-grid">
+            <label>output</label>
+            <textarea class="mono" style="min-height:60px">null</textarea>
+          </div>
+          <p class="hint">Envoie <code>{"type": "finished", "output": …}</code> aux coachs connectés et vide les demandes ouvertes.</p>
+          <button class="btn primary">Terminer le match</button>
+        </div>
+
+        <!-- Pannes -->
+        <div class="tab-pane" id="t-chaos">
+          <div class="form-grid">
+            <label>Socket</label>
+            <div class="btn-row"><button class="btn sm danger">Couper domicile</button><button class="btn sm danger">Couper visiteur</button><button class="btn sm danger">Couper les deux</button></div>
+            <label>Prochain accès</label>
+            <div class="btn-row"><button class="btn sm warn">Refuser 403 / 4403</button><button class="btn sm warn">Refuser 404 / 4404</button><button class="btn sm warn">Arrivée en 500 (socket ouverte)</button></div>
+            <label>Trames</label>
+            <div class="btn-row"><button class="btn sm">Perdre la prochaine</button><button class="btn sm">Retarder de… <input type="text" class="mono" value="2000" style="width:56px;padding:0 4px"> ms</button><button class="btn sm">Response sans commande</button><button class="btn sm">Texte non JSON</button></div>
+            <label>Serveur</label>
+            <div class="btn-row"><button class="btn sm danger">Arrêter l'écoute</button><button class="btn sm">Redémarrer (perd les sockets, garde les matchs)</button></div>
+          </div>
+        </div>
+
+        <!-- Brut -->
+        <div class="tab-pane" id="t-raw">
+          <div class="form-grid">
+            <label>Canal</label>
+            <div class="radio-row"><label><input type="radio" name="raw" checked> domicile</label><label><input type="radio" name="raw"> visiteur</label></div>
+            <label>Texte</label>
+            <textarea class="mono" style="min-height:70px">{"type": "accepted", "command": {"type": "choose_kick_off", "choice": "kick"}}</textarea>
+          </div>
+          <p class="hint">Envoyé tel quel, sans contrôle. Pour éprouver la robustesse du client.</p>
+          <button class="btn warn">Envoyer la trame</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="coaches">
+      <!-- ── Faits du match ── -->
+      <section class="panel">
+        <header><h3>Faits du match</h3><div class="spacer"></div><span class="pill soon">relais désactivé</span></header>
+        <table class="facts">
+          <thead><tr><th>seq</th><th>type</th><th>contenu</th></tr></thead>
+          <tbody>
+            <tr><td class="seq">0</td><td class="type">game_started</td><td class="payload">home_team 01JCPZ8E…, visitor_team 01JCPZ9K…</td></tr>
+            <tr><td class="seq">1</td><td class="type">team_fetched</td><td class="payload">home · 12 joueurs · fans 3</td></tr>
+            <tr><td class="seq">2</td><td class="type">team_fetched</td><td class="payload">visitor · 11 joueurs · fans 2</td></tr>
+            <tr><td class="seq">3</td><td class="type">coach_joined</td><td class="payload">home</td></tr>
+            <tr><td class="seq">4</td><td class="type">coach_joined</td><td class="payload">visitor</td></tr>
+            <tr><td class="seq">5</td><td class="type">dice_rolled</td><td class="payload">d3=2, d3=1, 2d6=4+3</td></tr>
+            <tr><td class="seq">6</td><td class="type">fan_factor_determined</td><td class="payload">home 3+2=5 · visitor 2+1=3</td></tr>
+            <tr><td class="seq">7</td><td class="type">weather_determined</td><td class="payload">7 · perfect_conditions</td></tr>
+            <tr><td class="seq">8</td><td class="type">roll_off_won</td><td class="payload">home</td></tr>
+            <tr class="queued"><td class="seq">9</td><td class="type">kicking_team_chosen</td><td class="payload">en file · part à l'acceptation</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- ── Conformité du client ── -->
+      <section class="panel">
+        <header><h3>Conformité du client</h3><div class="spacer"></div><span class="pill err">2 écarts</span></header>
+        <ul class="rules">
+          <li class="ok"><span class="ic">✓</span><span>R2 — une commande à la fois<small>aucune commande envoyée avant la Response de la précédente</small></span><span class="pill">dom. · vis.</span></li>
+          <li class="ko"><span class="ic">✗</span><span>R3 — ne répondre qu'à une demande ouverte<small>visiteur, 14:03:40 : <code>choose_kick_off</code> sans demande ouverte</small></span><span class="pill visitor">vis.</span></li>
+          <li class="ko"><span class="ic">✗</span><span>Message illisible (422)<small>domicile, 14:03:02 : <code>"choice": "recieve"</code> hors de <code>choices</code></small></span><span class="pill home">dom.</span></li>
+          <li class="ok"><span class="ic">✓</span><span>Pas de <code>join_game</code> envoyé par le client<small>le serveur le traite à la connexion</small></span><span class="pill">dom. · vis.</span></li>
+          <li class="na"><span class="ic">–</span><span>R7 — se reconnecte après une coupure<small>pas encore éprouvé : coupez une socket</small></span><span></span></li>
+          <li class="na"><span class="ic">–</span><span>R4 — ignore une demande reçue deux fois<small>non observable côté serveur : à vérifier dans le journal de bbTrainer</small></span><span></span></li>
+        </ul>
+      </section>
+    </div>
+  </section>
+
+  <!-- ═════════════ Colonne droite : le fil ═════════════ -->
+  <section class="panel wire">
+    <header><h2>Le fil</h2><div class="spacer"></div><button class="btn sm ghost">Exporter</button><button class="btn sm ghost">Vider</button></header>
+    <div class="filters">
+      <span class="pill home">domicile</span>
+      <span class="pill visitor">visiteur</span>
+      <span class="pill">↓ descendant</span>
+      <span class="pill">↑ montant</span>
+      <span class="pill">système</span>
+    </div>
+    <div class="frames">
+
+      <div class="frame sys"><time>14:02:11</time><span class="dir">◆</span><div>
+        <div class="who"><span class="pill home">dom.</span><span class="t sys">socket ouverte · admis · premier accès</span></div>
+        <pre>le serveur traite join_game pour ce coach</pre>
+      </div></div>
+
+      <div class="frame down"><time>14:02:11</time><span class="dir">↓</span><div>
+        <div class="who"><span class="pill home">dom.</span><span class="t">accepted</span></div>
+        <pre>{"type":"accepted","command":{"type":"join_game","coach_id":"01JCQ4K2…C0QM"}}</pre>
+        <div class="note ok">Response de l'arrivée : le client n'a rien envoyé (R1, exception)</div>
+      </div></div>
+
+      <div class="frame sys"><time>14:02:30</time><span class="dir">◆</span><div>
+        <div class="who"><span class="pill visitor">vis.</span><span class="t sys">socket ouverte · admis · premier accès</span></div>
+      </div></div>
+
+      <div class="frame down"><time>14:02:30</time><span class="dir">↓</span><div>
+        <div class="who"><span class="pill home">dom.</span><span class="t">request</span><span class="hint">kick_off_choice #7</span></div>
+        <pre>{"type":"request","key":"kick_off_choice","request_id":7,"options":{"to":"coach","coach_id":"01JCQ4K2…C0QM","accepts":["choose_kick_off"],"choices":["kick","receive"]}}</pre>
+        <div class="note ok">ouverte par la jonction du visiteur : arrive sur l'autre canal</div>
+      </div></div>
+
+      <div class="frame down"><time>14:02:30</time><span class="dir">↓</span><div>
+        <div class="who"><span class="pill visitor">vis.</span><span class="t">accepted</span></div>
+        <pre>{"type":"accepted","command":{"type":"join_game","coach_id":"01JCQ4K9…V7XZ"}}</pre>
+      </div></div>
+
+      <div class="frame up"><time>14:03:02</time><span class="dir">↑</span><div>
+        <div class="who"><span class="pill home">dom.</span><span class="t">command</span></div>
+        <pre>{"command":{"type":"choose_kick_off","choice":"recieve"}}</pre>
+      </div></div>
+
+      <div class="frame down"><time>14:03:02</time><span class="dir">↓</span><div>
+        <div class="who"><span class="pill home">dom.</span><span class="t refused">refused 422</span></div>
+        <pre>{"type":"refused","status":422,"detail":"message illisible : [{'type': 'literal_error', 'loc': ('command', 'choose_kick_off', 'choice'), …}]"}</pre>
+        <div class="note">erreur du client — refus automatique, sans passer par l'opérateur</div>
+      </div></div>
+
+      <div class="frame up"><time>14:03:40</time><span class="dir">↑</span><div>
+        <div class="who"><span class="pill visitor">vis.</span><span class="t">command</span></div>
+        <pre>{"command":{"type":"choose_kick_off","choice":"receive"}}</pre>
+      </div></div>
+
+      <div class="frame down"><time>14:03:40</time><span class="dir">↓</span><div>
+        <div class="who"><span class="pill visitor">vis.</span><span class="t refused">refused 409</span></div>
+        <pre>{"type":"refused","status":409,"detail":"le dossier 01JCQ4M8…B0WD n'attend aucune entrée de 01JCQ4K9…V7XZ"}</pre>
+        <div class="note">R3 : aucune demande ouverte pour ce coach</div>
+      </div></div>
+
+      <div class="frame up"><time>14:04:15</time><span class="dir">↑</span><div>
+        <div class="who"><span class="pill home">dom.</span><span class="t">command</span><span class="pill warn">à juger</span></div>
+        <pre>{"command":{"type":"choose_kick_off","choice":"kick"}}</pre>
+      </div></div>
+
+    </div>
+  </section>
+
+</main>
+
+<script>
+  // Seule interactivité de la maquette : les onglets du composeur.
+  document.querySelectorAll('.tabs button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var tabs = b.parentElement;
+      tabs.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); });
+      var body = tabs.nextElementSibling;
+      body.querySelectorAll('.tab-pane').forEach(function (p) { p.classList.toggle('on', p.id === b.dataset.tab); });
+    });
+  });
+</script>
+</body>
+</html>

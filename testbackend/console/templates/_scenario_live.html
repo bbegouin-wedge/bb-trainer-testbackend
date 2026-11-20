@@ -1,0 +1,4 @@
+{% import "_regions.html" as r with context %}
+{% import "_scenario_regions.html" as s with context %}
+{{ r.server(backend, game, oob=True) }}
+{{ s.run_panel(scenario, file, steps, run, games, oob=True) }}

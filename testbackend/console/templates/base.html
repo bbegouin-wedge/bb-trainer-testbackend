@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Doublure automaton{% endblock %}</title>
+<link rel="stylesheet" href="/ui/static/style.css">
+<script src="/ui/static/htmx.min.js"></script>
+<script src="/ui/static/htmx-ws.js"></script>
+<script src="/ui/static/console.js"></script>
+</head>
+<body hx-ext="json-body, ws" hx-swap="none" {% block body_attrs %}{% endblock %}>
+{% import "_regions.html" as r with context %}
+<header class="topbar">
+  <div class="brand">
+    <span class="dot"></span>
+    <b>bb-testbackend</b>
+    <span>doublure d'automaton pour bbTrainer</span>
+  </div>
+  <nav class="topnav">
+    <a href="/" class="{{ 'on' if page == 'console' }}">Console</a>
+    <a href="/ui/scenarios" class="{{ 'on' if page == 'scenarios' }}">Scénarios</a>
+  </nav>
+  <div class="spacer"></div>
+  {{ r.server(backend, game) }}
+</header>
+<div id="flash" class="flash" hidden></div>
+{% block main %}{% endblock %}
+</body>
+</html>

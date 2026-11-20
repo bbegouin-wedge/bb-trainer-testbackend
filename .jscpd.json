@@ -1,0 +1,10 @@
+{
+  "path": ["testbackend", "tests"],
+  "ignore": ["**/static/htmx*.js", "**/__pycache__/**"],
+  "format": ["python", "javascript", "css", "markup"],
+  "minLines": 6,
+  "minTokens": 60,
+  "threshold": 0,
+  "reporters": ["console"],
+  "exitCode": 1
+}

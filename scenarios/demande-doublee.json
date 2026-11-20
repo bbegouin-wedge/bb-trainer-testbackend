@@ -1,0 +1,15 @@
+{
+  "name": "Demande reçue deux fois",
+  "description": "la même demande (key, request_id) arrive deux fois : le client n'y répond qu'une fois",
+  "group": "Cas limites du protocole",
+  "rule": "R4",
+  "game": {"game_id": "01JCQ4M8Z7T2V9K3X5R1N6B0WD", "home_coach": "01JCQ4K2H8P5S7D3F9A1E6C0QM", "home_team": "01JCPZ8E0000000000000Q3TN0", "visitor_coach": "01JCQ4K9R3T6W8Y2B5N1M4V7XZ", "visitor_team": "01JCPZ9K0000000000000M1VD0"},
+  "steps": [
+    {"wait": "connect", "coach": "home", "timeout": 60},
+    {"wait": "connect", "coach": "visitor", "timeout": 60},
+    {"do": "request", "to": "home", "key": "kick_off_choice", "options": {"accepts": ["choose_kick_off"], "choices": ["kick", "receive"]}, "twice": true},
+    {"wait": "command", "coach": "home", "timeout": 60},
+    {"wait": "delay", "seconds": 0.5, "note": "une seconde réponse arriverait ici : écart R2/R3 dans la conformité"},
+    {"do": "finish"}
+  ]
+}

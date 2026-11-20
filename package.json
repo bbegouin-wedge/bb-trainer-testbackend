@@ -1,0 +1,8 @@
+{
+  "name": "bb-testbackend-tools",
+  "private": true,
+  "description": "Outils de vérification (code dupliqué), comme dans automaton",
+  "devDependencies": {
+    "jscpd": "5.4.2"
+  }
+}

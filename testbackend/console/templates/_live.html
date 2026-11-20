@@ -1,0 +1,12 @@
+{# Ce que le websocket d'observateur pousse : toutes les régions, hors-bande. #}
+{% import "_regions.html" as r with context %}
+{{ r.server(backend, game, oob=True) }}
+{{ r.games(backend, game, oob=True) }}
+{{ r.settings_panel(settings, oob=True) }}
+{{ r.head(game, oob=True) }}
+{{ r.coach_panel(game, "home", oob=True) }}
+{{ r.coach_panel(game, "visitor", oob=True) }}
+{{ r.stage_select(game, oob=True) }}
+{{ r.facts(game, settings, oob=True) }}
+{{ r.conformity_panel(conformity, oob=True) }}
+{{ r.wire(game, oob=True) }}

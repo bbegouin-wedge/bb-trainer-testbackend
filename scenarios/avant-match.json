@@ -1,0 +1,34 @@
+{
+  "name": "Avant-match complet",
+  "description": "jonction des deux coachs, faits de l'avant-match, choix du coup d'envoi, fin",
+  "group": "Parcours nominaux",
+  "rule": "R5",
+  "game": {
+    "game_id": "01JCQ4M8Z7T2V9K3X5R1N6B0WD",
+    "home_coach": "01JCQ4K2H8P5S7D3F9A1E6C0QM",
+    "home_team": "01JCPZ8E0000000000000Q3TN0",
+    "visitor_coach": "01JCQ4K9R3T6W8Y2B5N1M4V7XZ",
+    "visitor_team": "01JCPZ9K0000000000000M1VD0"
+  },
+  "settings": {"relay_facts": true},
+  "steps": [
+    {"do": "phase", "label": "Jonction des coachs"},
+    {"wait": "connect", "coach": "home", "timeout": 60},
+    {"wait": "connect", "coach": "visitor", "timeout": 60},
+    {"do": "phase", "label": "Avant-match · choix du coup d'envoi"},
+    {"do": "fact", "fact": {"type": "dice_rolled", "rolls": [{"faces": 3, "value": 2}, {"faces": 3, "value": 1}, {"faces": 6, "value": 4}, {"faces": 6, "value": 3}]}},
+    {"do": "fact", "fact": {"type": "fan_factor_determined", "side": "home", "dedicated_fans": 1, "casual_fans": 2, "fan_factor": 3}},
+    {"do": "fact", "fact": {"type": "fan_factor_determined", "side": "visitor", "dedicated_fans": 1, "casual_fans": 1, "fan_factor": 2}},
+    {"do": "fact", "fact": {"type": "weather_determined", "roll": 7, "weather": "perfect_conditions"}},
+    {"do": "fact", "fact": {"type": "roll_off_won", "side": "home"}},
+    {"do": "request", "to": "home", "key": "kick_off_choice", "options": {"accepts": ["choose_kick_off"], "choices": ["kick", "receive"]}},
+    {
+      "wait": "command", "coach": "home", "type": "choose_kick_off", "timeout": 120,
+      "note": "le gagnant du tir au dé choisit ; le fait part avant l'accepted",
+      "bind": {"choice": "kick_choice"},
+      "set": {"kicking_side": {"from": "$kick_choice", "map": {"kick": "home", "receive": "visitor"}}},
+      "judge": {"then": [{"do": "fact", "fact": {"type": "kicking_team_chosen", "side": "$kicking_side"}}]}
+    },
+    {"do": "finish"}
+  ]
+}
